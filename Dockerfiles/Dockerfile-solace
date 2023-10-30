@@ -1,0 +1,63 @@
+ARG VERSION
+
+# --------------------------------------------------------------------------------------------------
+# Builder Image
+# --------------------------------------------------------------------------------------------------
+FROM cytopia/ansible:${VERSION}-tools as builder
+
+# Required tools for building Python packages
+RUN set -eux \
+	&& apk add --no-cache \
+		# build tools
+		coreutils \
+		g++ \
+		gcc \
+		make \
+		musl-dev \
+		openssl-dev \
+		python3-dev \
+		# misc tools
+		git \
+		# go tools
+		cargo \
+		go
+
+# Python packages (copied to final image)
+RUN set -eux \
+	&& pip3 install --no-cache-dir --no-compile \
+		requests==2.25.0 \
+		xmltodict==0.12.0 \
+	&& find /usr/lib/ -name '__pycache__' -print0 | xargs -0 -n1 rm -rf \
+	&& find /usr/lib/ -name '*.pyc' -print0 | xargs -0 -n1 rm -rf
+
+# Install solace
+RUN ansible-galaxy collection install --force solace.pubsub_plus
+
+# --------------------------------------------------------------------------------------------------
+# Final Image
+# --------------------------------------------------------------------------------------------------
+FROM cytopia/ansible:${VERSION}-tools as production
+ARG VERSION
+# https://github.com/opencontainers/image-spec/blob/master/annotations.md
+#LABEL "org.opencontainers.image.created"=""
+#LABEL "org.opencontainers.image.version"=""
+#LABEL "org.opencontainers.image.revision"=""
+LABEL "maintainer"="cytopia <cytopia@everythingcli.org>"
+LABEL "org.opencontainers.image.authors"="cytopia <cytopia@everythingcli.org>"
+LABEL "org.opencontainers.image.vendor"="cytopia"
+LABEL "org.opencontainers.image.licenses"="MIT"
+LABEL "org.opencontainers.image.url"="https://github.com/cytopia/docker-ansible"
+LABEL "org.opencontainers.image.documentation"="https://github.com/cytopia/docker-ansible"
+LABEL "org.opencontainers.image.source"="https://github.com/cytopia/docker-ansible"
+LABEL "org.opencontainers.image.ref.name"="Ansible ${VERSION} aws"
+LABEL "org.opencontainers.image.title"="Ansible ${VERSION} aws"
+LABEL "org.opencontainers.image.description"="Ansible ${VERSION} aws"
+
+COPY --from=builder /usr/lib/python3.10/site-packages/ /usr/lib/python3.10/site-packages/
+
+COPY --from=builder /root/.ansible/collections/ansible_collections/solace/pubsub_plus /root/.ansible/collections/ansible_collections/solace/pubsub_plus
+COPY --from=builder /root/.ansible/collections/ansible_collections/solace/pubsub_plus /home/ansible/.ansible/collections/ansible_collections/solace/pubsub_plus
+
+WORKDIR /data
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["/bin/bash"]

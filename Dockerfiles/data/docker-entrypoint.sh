@@ -95,6 +95,13 @@ update_uid_gid() {
 			exit 1
 		fi
 	fi
+	if [ -d /home/ansible/.ansible ]; then
+		echo "[INFO] Adjusting ownership on directory: ~/.ansible/"
+		if ! chown -R "${user}:${group}" /home/ansible/.ansible/; then
+			>&2 echo "[ERR]  Failed to 'chown ${user}:${group} ~/.ansible'"
+			exit 1
+		fi
+	fi
 }
 
 init_gpg_key_cmd() {
